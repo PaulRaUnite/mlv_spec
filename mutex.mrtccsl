@@ -1,0 +1,5 @@
+mutex(a: clock, b: clock, c: clock, d: clock) {
+    a alternates b;
+    c alternates d;
+    (a+c) alternates (c+d);
+}

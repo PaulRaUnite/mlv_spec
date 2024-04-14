@@ -1,0 +1,9 @@
+between(from: clock, to: clock, who: clock, strict: bool = false) {
+	from < sample from on (who+to) <= to;
+	next from < sample to on who;
+	from alternates to;
+	if strict {
+		who # from;
+		who # to;
+	}
+}

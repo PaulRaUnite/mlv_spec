@@ -1,0 +1,9 @@
+(executable
+ (name mlv)
+ (public_name mlv)
+ (libraries mrtccsl))
+
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A))))

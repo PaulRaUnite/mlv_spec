@@ -1,0 +1,144 @@
+// FUN.19
+pcv_mode(mode: struct, sensor: struct) where {
+	IE in [1, 4]; // ratio of expiratory time to inspiratory time PER.5, includes PER.13
+	RR in [4,50]/1 min; // respiratory rate, breath per minute PER.4, includes PER.12
+	
+	trigger_window_delay = 0.7s; // CONT.45
+	
+	// Check that nothing obstructs inspiration to start (if window is too small,the "faster" will not reset difference in time)
+	trigger_window.start <= fastest(sensor.inhale, trigger_window.finish) <= next inspiration.start; //FUN.21
+	// Rationale: we should not allow inhale sensing outside of trigger window, otherwise it messes up the logic
+	between(trigger_window.start, trigger_window.finish, sensor.inhale)
+} {
+	expiration = inspiration delayed by 1/RR/(1+IE); //FUN.20
+	
+	trigger_window = {
+		start < finish;
+		start = .expiration delayed by trigger_window_delay; // CONT.45
+		finish = .inspiration delayed by 1/RR; // FUN.20
+	};
+	inspiration_condition = sensor.inhale + trigger_window.finish - ((sensor.inhale + mode.pcv.finish) sampled on trigger_window.finish) - (mode.pcv.finish sampled on sensor.inhale); // CONT.25
+	next inspiration = first sampled inspiration_condition on trigger_window.fihish;
+} assert {
+	trigger_window.finish <= expiration delayed by IE/RR/(1+IE); // FUN.20, double check really
+	inspiration alternates expiration; // same
+}
+
+//FUN.24
+psv_mode(mode: struct, sensor: struct, alarm: struct) where {
+	min_exp_time_psv in [0.4s, 2s]; // CONT.36.3
+	max_apnea_lag_time in [10s, 60s]; // PER.11, PER.21
+	max_expiration_lag = 7s; // CONT.32
+	
+	// expiration <= next sensor.inhale <= next inspiration; // limit inhale sensing to the apropriate window
+	// but also check that nothing obstructs causality
+	sensor.inhale +<= inspiration; // FUN.25
+} {
+	inspiration alternates expiration;
+	expiration_deadline = inspiration delayed by max_expiration_lag; // CONT.32
+	fastest(sensor.expire, expiration_deadline) <= expiration; // CONT.32
+	inhale_deadline = expiration delayed by max_apnea_lag_time; //FUN.27, CONT.36.2
+	// Rationale: if [expiration, deadline] window overlaps, inhale can be lost, thus window is shortned
+	shortened_inhale_deadline = fastest(inhale_deadline, sensor.inhale);
+	apnea = shortened_inhale_deadline - sensor.inhale sampled on shortened_inhale_deadline;
+	apnea <= alarm.apnea; //FUN.27.1
+	apnea +<= mode.pcv.start; // FUN.27.2
+	
+	between(expiration delayed by min_exp_time_psv, expiration delayed by max_apnea_lag_time, sensor.inhale); // so that controller will trigger inhale inside the proper window
+}
+
+phase() {start alternates finish};
+
+cyber(physical: struct, user: struct) {
+	machine = phase();
+	
+	selftest = phase();
+    // CONT.3: only one selftest can happen in power cycle
+	between(machine.start, machine.finish, selftest.start | selftest.finish);
+    // CONT.4: if selftest happened, machine was started
+    (sample machine.start on selftest.start) = selftest.start;
+	
+	ventilation = phase();
+	// ventilation can be done only while machine works
+	between(machine.start, machine.finish, ventilation.start | ventilation.finish);
+	// ventilation has to stop inside the window before machine is off
+	(machine.start | ventilation.finish) alternates (machine.finish | ventilation.start);
+	
+	mode = {
+		pcv = phase();
+		psv = phase();
+        // Modes are exclusive
+		open mutex{pcv.start => pcv.finish, psv.start => psv.finish};
+        start = pcv.start + psv.start;
+        finish = pcv.fihish + psv.fihish;
+	}
+    // MLV should be considered ventilating in case if it is just a mode change
+	between(ventilation.start, ventilation.finish, mode.start | mode.finish);
+    // if ventilation happened then selftest should have happened or ventilation stopped
+    (sample selftest.start+ventilation.fihish on ventilation.start) = ventilation.start;
+
+	// Modes should finish before ventilation finishes
+	(ventilation.start | mode.psv.finish) alternates (ventilation.finish | mode.psv.start);
+	(ventilation.start | mode.pcv.finish) alternates (ventilation.finish | mode.pcv.start);
+	
+    // User can change the modes or to power up and down the machine.
+    // Extensive causality constraint means that other subsystems can also declare causality in other parts, like in case of apnea.
+    user.press.on_button +<= machine.start; //CONT.2
+    user.press.off_button +<= machine.finish; //CONT.10
+    user.press.psv_mode +<= mode.psv.start; //CONT.5
+    user.press.pcv_mode +<= mode.pcv.start; //CONT.6
+    user.press.ventilation_finish +<= ventilation.fihish; //CONT.4.2
+
+    // Inspiration and expiration commands can only be produced by the corresponding mode command. 
+	inspiration = pcv.inspiration | psv.inspiration;
+	expiration = pcv.expiration | psv.expiration;
+
+	// CONT.38 we need to return to safe state in case of ventilation stopping or a failure
+    same_count({open=physical.valve.in.close; close=physical.valve.in.open}, ventilation.finish | fail);
+    same_count(physical.valve.out, ventilation.finish | fail);
+
+	// CONT.39
+	inspiration +<= physical.valve.out.close;
+	inspiration +<= physical.valve.in.open;
+	physical.valve.out.close < physical.valve.in.open;
+
+    // CONT.46 power cycle is the only choice after failure
+    // Should add reaction on how fast the failure should be dealt with, but is not present in the requirements. 
+    fail +<= machine.finish;
+    forbid (mode.start, selftest.start) from fail to machine.finish;
+}
+
+valve() {
+	// We assume that valve state is unknown at the beginning, thus first need to close it
+	close alternates open;
+}
+
+physical() {
+	valve = {
+		in = valve();
+		out = valve();
+	}
+	// CONT.1.6, safety, FUN.31, only one valve can be open at the time
+    // Prevents creating circuit in the air paths for high pressure oxygen
+	mask = mutex{in.open => next in.close, out.open => next out.close};
+}
+
+alarm() {
+	high += apnea; // extensive sum constraint
+}
+
+spec = cyber(physical());
+
+// Checking properties:
+// - not empty => schedules exist;
+// - weakly live => there is infinite behaviour which involves all clocks, not necessary in the same schedule
+// - safe => representation is finite, can be used safely as monitor
+check spec is not empty and weakly live and safe;
+
+// Checking higher-level properties
+check spec when {
+	// assumptions of timings between some clocks, like valve opening after fail
+} satisfies {
+	// FUN.32: breathing is not obstructed, valve to exhale opens at most 5 seconds after closing
+	spec.physical.valve.out.open <= (spec.physical.valve.out.close delayed by 5s); // 5s is just an example
+};
