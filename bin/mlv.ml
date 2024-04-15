@@ -24,7 +24,7 @@ let hundred = num_of_int 100
 let half = num_of_int 1 // num_of_int 2
 
 let () =
-  let _ = Random.init 90237496439 in
+  let _ = Random.init 365216367 in
   (* let ie = random (num_of_int 1) (num_of_int 4) in
      let rr = random (num_of_int 4) (num_of_int 50) in // 1 min*)
   let ie = num_of_int 1 in

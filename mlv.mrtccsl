@@ -105,7 +105,8 @@ cyber(physical: struct, user: struct) {
     // CONT.46 power cycle is the only choice after failure
     // Should add reaction on how fast the failure should be dealt with, but is not present in the requirements. 
     fail +<= machine.finish;
-    forbid (mode.start, selftest.start) from fail to machine.finish;
+	// CONT.19
+    forbid (mode.start, selftest.start, ventilation.start) from fail to machine.finish;
 }
 
 valve() {
