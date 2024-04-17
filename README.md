@@ -17,3 +17,10 @@ Uses [MRTCCSL](https://github.com/PaulRaUnite/mrtccsl) to describe and simulate 
 
 SVG file is generated using [svgbob](https://github.com/ivanceras/svgbob/).
 
+## Running the example
+- install opam from https://opam.ocaml.org
+- clone the repo with `git clone https://github.com/PaulRaUnite/mlv_spec`
+- (recommended) create local switch with `opam switch create ./` (run inside the directory)
+- don't forget to run `eval $(opam env)`
+- run `opam install . --deps-only` to install the dependencies
+- finally, `dune exec mlv` to build and generate the trace.
