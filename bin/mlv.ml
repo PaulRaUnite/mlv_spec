@@ -53,9 +53,9 @@ let () =
       ]
   in
   let machine = A.of_spec pcv_spec in
-  let trace = A.skip_empty @@ A.run fast_strat machine 20 in
+  let trace = A.skip_empty @@ A.gen_trace fast_strat machine 20 in
   let _, _, clocks = machine in
   let clocks = A.L.diff clocks (A.L.of_list [ "cond"; "-"; "s"; "next inspiration"; "first" ]) in
-  let svgbob_str = A.trace_to_svgbob ~numbers:false clocks trace in
+  let svgbob_str = A.trace_to_svgbob ~numbers:false (A.L.elements clocks) trace in
   print_endline svgbob_str
 ;;
