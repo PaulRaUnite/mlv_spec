@@ -69,8 +69,8 @@ cyber(physical: struct, user: struct) {
 		psv = phase();
         // Modes are exclusive
 		open mutex{pcv.start => pcv.finish, psv.start => psv.finish};
-        start = pcv.start + psv.start;
-        finish = pcv.fihish + psv.fihish;
+        start = pcv.start | psv.start;
+        finish = pcv.fihish | psv.fihish;
 	}
     // MLV should be considered ventilating in case if it is just a mode change
 	between(ventilation.start, ventilation.finish, mode.start | mode.finish);

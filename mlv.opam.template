@@ -1,5 +1,6 @@
 pin-depends: [
-  ["mrtccsl.0.1" "git+https://github.com/paulraunite/mrtccsl"]
+  ["mrtccsl.0.2-preview" "git+https://github.com/paulraunite/mrtccsl"]
   ["camllib.1.4.0" "git+https://github.com/paulraunite/camllib"]
   ["bddapron.2.4.0" "git+https://github.com/paulraunite/bddapron"]
+  ["vpl-core.0.6" "git+https://github.com/PaulRaUnite/VPL"]
 ]
